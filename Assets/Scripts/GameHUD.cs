@@ -16,6 +16,11 @@ public class GameHUD : MonoBehaviour
     [Header("Crosshair")]
     public Image crosshair;
 
+    [Header("Info Panel")]
+    public Text timeText;
+    public Text waveText;
+    public Text enemyLevelText;
+
     private PlayerHealth playerHealth;
     private Canvas canvas;
     private RectTransform healthBarFillRect;
@@ -34,6 +39,7 @@ public class GameHUD : MonoBehaviour
 
         BuildHealthBar();
         BuildCrosshair();
+        BuildInfoPanel();
         BuildGameOverPanel();
     }
 
@@ -50,6 +56,19 @@ public class GameHUD : MonoBehaviour
         {
             displayedHealth = Mathf.Lerp(displayedHealth, targetHealth, Time.deltaTime * 8f);
             healthBarFillRect.anchorMax = new Vector2(displayedHealth, 1f);
+        }
+
+        if (GameManager.Instance != null)
+        {
+            float t = GameManager.Instance.TimeElapsed;
+            int mins = Mathf.FloorToInt(t / 60f);
+            int secs = Mathf.FloorToInt(t % 60f);
+            if (timeText != null)
+                timeText.text = $"Time: {mins:00}:{secs:00}";
+            if (waveText != null)
+                waveText.text = $"Wave: {GameManager.Instance.CurrentWave}";
+            if (enemyLevelText != null)
+                enemyLevelText.text = $"Enemy Lv: {GameManager.Instance.EnemyLevel}";
         }
     }
 
@@ -99,6 +118,44 @@ public class GameHUD : MonoBehaviour
         Shadow hpShadow = hpText.AddComponent<Shadow>();
         hpShadow.effectColor = new Color(0, 0, 0, 0.9f);
         hpShadow.effectDistance = new Vector2(1, -1);
+    }
+
+    private void BuildInfoPanel()
+    {
+        GameObject panel = CreateUIElement("InfoPanel", transform);
+        RectTransform panelRect = panel.GetComponent<RectTransform>();
+        panelRect.anchorMin = new Vector2(1, 1);
+        panelRect.anchorMax = new Vector2(1, 1);
+        panelRect.pivot = new Vector2(1, 1);
+        panelRect.anchoredPosition = new Vector2(-20, -20);
+        panelRect.sizeDelta = new Vector2(200, 100);
+        Image panelBg = panel.AddComponent<Image>();
+        panelBg.color = new Color(0, 0, 0, 0.6f);
+
+        timeText = CreateInfoText("TimeText", panel.transform, new Vector2(0, -8), "Time: 00:00");
+        waveText = CreateInfoText("WaveText", panel.transform, new Vector2(0, -36), "Wave: 1");
+        enemyLevelText = CreateInfoText("EnemyLevelText", panel.transform, new Vector2(0, -64), "Enemy Lv: 1");
+    }
+
+    private Text CreateInfoText(string name, Transform parent, Vector2 position, string defaultText)
+    {
+        GameObject obj = CreateUIElement(name, parent);
+        RectTransform rect = obj.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0, 1);
+        rect.anchorMax = new Vector2(1, 1);
+        rect.pivot = new Vector2(0.5f, 1);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = new Vector2(0, 24);
+        Text text = obj.AddComponent<Text>();
+        text.text = defaultText;
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.fontSize = 18;
+        text.alignment = TextAnchor.MiddleCenter;
+        text.color = Color.white;
+        Shadow shadow = obj.AddComponent<Shadow>();
+        shadow.effectColor = new Color(0, 0, 0, 0.9f);
+        shadow.effectDistance = new Vector2(1, -1);
+        return text;
     }
 
     private void BuildCrosshair()
