@@ -31,4 +31,5 @@ Thumbs.db
 *.gz
 crashlytics-build.properties
 sysinfo.txt
+.plastic/
 setup_repo.sh
