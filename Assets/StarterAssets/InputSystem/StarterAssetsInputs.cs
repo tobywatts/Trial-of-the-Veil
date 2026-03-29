@@ -64,7 +64,15 @@ namespace StarterAssets
 
 		public void SprintInput(bool newSprintState)
 		{
-			sprint = newSprintState;
+			if (GameSettings.ToggleSprint)
+			{
+				// Toggle mode: flip state once on press, ignore release.
+				if (newSprintState) sprint = !sprint;
+			}
+			else
+			{
+				sprint = newSprintState;
+			}
 		}
 
 		private void OnApplicationFocus(bool hasFocus)

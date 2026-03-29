@@ -36,6 +36,9 @@ namespace StarterAssets
         [Tooltip("The height the player can jump")]
         public float JumpHeight = 1.2f;
 
+        [Tooltip("Number of additional mid-air jumps allowed. Each DoubleJump pickup increments this.")]
+        public int ExtraJumps = 0;
+
         [Tooltip("The character uses its own gravity value. The engine default is -9.81f")]
         public float Gravity = -15.0f;
 
@@ -90,6 +93,7 @@ namespace StarterAssets
         // timeout deltatime
         private float _jumpTimeoutDelta;
         private float _fallTimeoutDelta;
+        private int _extraJumpsRemaining;
 
         // animation IDs
         private int _animIDSpeed;
@@ -97,6 +101,8 @@ namespace StarterAssets
         private int _animIDJump;
         private int _animIDFreeFall;
         private int _animIDMotionSpeed;
+        private int _animIDMoveX;
+        private int _animIDMoveZ;
 
 #if ENABLE_INPUT_SYSTEM 
         private PlayerInput _playerInput;
@@ -106,7 +112,7 @@ namespace StarterAssets
         private StarterAssetsInputs _input;
         private GameObject _mainCamera;
 
-        private const float _threshold = 0.01f;
+        private const float _threshold = 0.0001f;
 
         private bool _hasAnimator;
 
@@ -173,6 +179,8 @@ namespace StarterAssets
             _animIDJump = Animator.StringToHash("Jump");
             _animIDFreeFall = Animator.StringToHash("FreeFall");
             _animIDMotionSpeed = Animator.StringToHash("MotionSpeed");
+            _animIDMoveX = Animator.StringToHash("MoveX");
+            _animIDMoveZ = Animator.StringToHash("MoveZ");
         }
 
         private void GroundedCheck()
@@ -192,14 +200,17 @@ namespace StarterAssets
 
         private void CameraRotation()
         {
+            // freeze the camera when the game is paused (Time.timeScale == 0)
+            if (Time.timeScale <= 0f) return;
             // if there is an input and camera position is not fixed
             if (_input.look.sqrMagnitude >= _threshold && !LockCameraPosition)
             {
                 //Don't multiply mouse input by Time.deltaTime;
                 float deltaTimeMultiplier = IsCurrentDeviceMouse ? 1.0f : Time.deltaTime;
 
-                _cinemachineTargetYaw += _input.look.x * deltaTimeMultiplier;
-                _cinemachineTargetPitch += _input.look.y * deltaTimeMultiplier;
+                float sensitivity = GameSettings.Sensitivity;
+                _cinemachineTargetYaw += _input.look.x * deltaTimeMultiplier * sensitivity;
+                _cinemachineTargetPitch += _input.look.y * deltaTimeMultiplier * sensitivity;
             }
 
             // clamp our rotations so our values are limited 360 degrees
@@ -248,30 +259,22 @@ namespace StarterAssets
             _animationBlend = Mathf.Lerp(_animationBlend, targetSpeed, Time.deltaTime * SpeedChangeRate);
             if (_animationBlend < 0.01f) _animationBlend = 0f;
 
-            // normalise input direction
+            // Character rotates to face the direction of movement (camera-relative input).
             Vector3 inputDirection = new Vector3(_input.move.x, 0.0f, _input.move.y).normalized;
-
-            // note: Vector2's != operator uses approximation so is not floating point error prone, and is cheaper than magnitude
-            // if there is a move input rotate player when the player is moving
             if (_input.move != Vector2.zero)
             {
                 _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
                                   _mainCamera.transform.eulerAngles.y;
-                float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation, ref _rotationVelocity,
-                    RotationSmoothTime);
-
-                // rotate to face input direction relative to camera position
+                float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation,
+                    ref _rotationVelocity, RotationSmoothTime);
                 transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
             }
 
-
             Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
 
-            // move the player
             _controller.Move(targetDirection.normalized * (_speed * Time.deltaTime) +
                              new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
 
-            // update animator if using character
             if (_hasAnimator)
             {
                 _animator.SetFloat(_animIDSpeed, _animationBlend);
@@ -285,6 +288,7 @@ namespace StarterAssets
             {
                 // reset the fall timeout timer
                 _fallTimeoutDelta = FallTimeout;
+                _extraJumpsRemaining = ExtraJumps;
 
                 // update animator if using character
                 if (_hasAnimator)
@@ -310,6 +314,9 @@ namespace StarterAssets
                     {
                         _animator.SetBool(_animIDJump, true);
                     }
+
+                    // consume the jump input here so the next frame in the air doesn't immediately use the extra jump
+                    _input.jump = false;
                 }
 
                 // jump timeout
@@ -335,6 +342,19 @@ namespace StarterAssets
                     {
                         _animator.SetBool(_animIDFreeFall, true);
                     }
+                }
+
+                // mid-air double jump
+                if (_input.jump && _extraJumpsRemaining > 0)
+                {
+                    _extraJumpsRemaining--;
+                    _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
+                    if (_hasAnimator)
+                    {
+                        _animator.SetBool(_animIDJump, true);
+                        _animator.SetBool(_animIDFreeFall, false);
+                    }
+                    _fallTimeoutDelta = FallTimeout;
                 }
 
                 // if we are not grounded, do not jump
